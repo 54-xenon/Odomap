@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import MapKit
 
 // MARK: - ルート表示コンポーネント
 
@@ -48,53 +49,44 @@ struct RouteThumbnail: View {
     }
 }
 
-/// 記録終了画面のルートマップ（MapKit導入まではグリッド地図のプレースホルダ）
+/// 記録終了画面のルートマップ。実GPS座標を MKPolyline として描画する。
 struct RouteMapCard: View {
-    @Environment(\.colorScheme) private var colorScheme
     var ride: Ride
 
     var body: some View {
-        let mapBackground = colorScheme == .dark ? Color(hex: 0x151821) : Color(hex: 0xE4E9F0)
-        let gridColor = colorScheme == .dark
-            ? Color.white.opacity(0.05)
-            : Color(hex: 0xB4C3D7, alpha: 0.35)
-        GeometryReader { geo in
-            let inset = CGRect(origin: .zero, size: geo.size).insetBy(
-                dx: geo.size.width * 0.12, dy: geo.size.height * 0.14
-            )
-            ZStack {
-                mapBackground
-                Canvas { context, size in
-                    let spacing: CGFloat = 26
-                    var lines = Path()
-                    var x: CGFloat = spacing
-                    while x < size.width {
-                        lines.move(to: CGPoint(x: x, y: 0))
-                        lines.addLine(to: CGPoint(x: x, y: size.height))
-                        x += spacing
-                    }
-                    var y: CGFloat = spacing
-                    while y < size.height {
-                        lines.move(to: CGPoint(x: 0, y: y))
-                        lines.addLine(to: CGPoint(x: size.width, y: y))
-                        y += spacing
-                    }
-                    context.stroke(lines, with: .color(gridColor), lineWidth: 1)
-                }
-                RouteShape(route: ride.route)
-                    .path(in: inset)
-                    .stroke(Color.odoAccent, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                Circle().fill(Color(hex: 0x32D74B)).frame(width: 12, height: 12)
-                    .position(point(ride.route.start, in: inset))
-                Circle().fill(Color(light: Color(hex: 0xFF3B30), dark: Color(hex: 0xFF453A)))
-                    .frame(width: 12, height: 12)
-                    .position(point(ride.route.end, in: inset))
+        Map(initialPosition: .region(region)) {
+            MapPolyline(coordinates: ride.coordinates)
+                .stroke(Color.odoAccent, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+
+            if let start = ride.coordinates.first {
+                Marker("開始", coordinate: start)
+                    .tint(Color(hex: 0x32D74B))
+            }
+            if ride.coordinates.count > 1, let end = ride.coordinates.last {
+                Marker("終了", coordinate: end)
+                    .tint(Color(hex: 0xFF3B30))
             }
         }
+        .mapControlVisibility(.hidden)
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
-    private func point(_ p: CGPoint, in rect: CGRect) -> CGPoint {
-        CGPoint(x: rect.minX + p.x * rect.width, y: rect.minY + p.y * rect.height)
+    private var region: MKCoordinateRegion {
+        guard !ride.coordinates.isEmpty else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 35.681236, longitude: 139.767125),
+                span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            )
+        }
+        let lats = ride.coordinates.map(\.latitude)
+        let lons = ride.coordinates.map(\.longitude)
+        let minLat = lats.min() ?? 0, maxLat = lats.max() ?? 0
+        let minLon = lons.min() ?? 0, maxLon = lons.max() ?? 0
+        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2)
+        let span = MKCoordinateSpan(
+            latitudeDelta: max((maxLat - minLat) * 1.4, 0.01),
+            longitudeDelta: max((maxLon - minLon) * 1.4, 0.01)
+        )
+        return MKCoordinateRegion(center: center, span: span)
     }
 }

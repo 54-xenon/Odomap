@@ -2,7 +2,6 @@
 //  OdomapTests.swift
 //  OdomapTests
 //
-//  Created by とくおかけいと on 2026/07/26.
 //
 
 import Testing

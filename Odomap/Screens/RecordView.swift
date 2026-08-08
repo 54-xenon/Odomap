@@ -5,6 +5,8 @@
 
 import SwiftUI
 import Observation
+import CoreLocation
+import UIKit
 
 /// 走行時間の計測（GPS実装までは時間のみ実測、他はサンプル値）
 @Observable
@@ -33,7 +35,9 @@ struct RecordView: View {
     var onSave: (Ride) -> Void
 
     @State private var session = RecordingSession()
+    @State private var locationManager = LocationManager()
     @State private var finishedRide: Ride?
+    @State private var showPermissionAlert = false
 
     var body: some View {
         if let finishedRide {
@@ -43,6 +47,35 @@ struct RecordView: View {
             }
         } else {
             recordingBody
+                .onAppear { attemptStart() }
+                .onDisappear { locationManager.stopRecording() }
+                .onChange(of: locationManager.authorizationStatus) { _, _ in attemptStart() }
+                .alert("位置情報の許可が必要です", isPresented: $showPermissionAlert) {
+                    Button("設定を開く") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    Button("キャンセル", role: .cancel) {}
+                } message: {
+                    Text("ツーリングを記録するには、設定アプリから位置情報の利用を許可してください。")
+                }
+        }
+    }
+
+    private func attemptStart() {
+        switch locationManager.authorizationStatus {
+        case .notDetermined:
+            locationManager.requestAuthorizationIfNeeded()
+        case .authorizedWhenInUse:
+            locationManager.requestAlwaysIfPossible()
+            locationManager.startRecording()
+        case .authorizedAlways:
+            locationManager.startRecording()
+        case .denied, .restricted:
+            showPermissionAlert = true
+        @unknown default:
+            break
         }
     }
 
@@ -68,10 +101,10 @@ struct RecordView: View {
                     columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())],
                     spacing: 12
                 ) {
-                    metricCard("距離", value: "62.8 km")
-                    metricCard("現在速度", value: "58 km/h")
+                    metricCard("距離", value: String(format: "%.1f km", locationManager.distanceKm))
+                    metricCard("現在速度", value: String(format: "%.0f km/h", locationManager.currentSpeedKmh))
                     weatherCard
-                    metricCard("高度", value: "312 m")
+                    metricCard("高度", value: String(format: "%.0f m", locationManager.currentAltitude))
                 }
 
                 Spacer()
@@ -128,6 +161,7 @@ struct RecordView: View {
         HStack(spacing: 10) {
             Button {
                 session.togglePause()
+                locationManager.isPaused = session.isPaused
             } label: {
                 Label(session.isPaused ? "再開" : "一時停止",
                       systemImage: session.isPaused ? "play.fill" : "pause.fill")
@@ -156,15 +190,17 @@ struct RecordView: View {
     }
 
     private func finishRecording() {
-        // 距離・速度・標高はGPS実装までサンプル値
+        locationManager.stopRecording()
+        let coordinates = locationManager.coordinates
         finishedRide = Ride(
             name: "今日のツーリング",
             date: session.startedAt,
-            distanceKm: 62.8,
+            distanceKm: locationManager.distanceKm,
             duration: session.elapsed(),
-            maxSpeedKmh: 82.4,
-            elevationGain: 312,
-            route: .diagonal,
+            maxSpeedKmh: locationManager.maxSpeedKmh,
+            elevationGain: locationManager.elevationGainMeters,
+            route: .fromCoordinates(coordinates),
+            coordinates: coordinates,
             thumbnailColors: [Color(hex: 0x57B7FF), Color(hex: 0x0A84FF)]
         )
     }

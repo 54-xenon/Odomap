@@ -2,7 +2,6 @@
 //  OdomapApp.swift
 //  Odomap
 //
-//  Created by とくおかけいと on 2026/07/26.
 //
 
 import SwiftUI

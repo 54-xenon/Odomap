@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import CoreLocation
 
 // MARK: - ルートデータ（正規化座標 0-1）
 
@@ -30,6 +31,29 @@ struct RouteData {
     static let diagonal = normalized(56, (10, 44), [((18, 40), (14, 28), (24, 26)), ((34, 24), (30, 12), (42, 10))])
     static let coastal = normalized(56, (8, 20), [((20, 22), (18, 34), (30, 32)), ((40, 30), (38, 40), (48, 38))])
     static let winding = normalized(56, (12, 42), [((24, 36), (20, 20), (34, 18)), ((42, 17), (40, 10), (46, 8))])
+
+    /// 実GPS座標を 0-1 の緯度経度バウンディングボックスに正規化し、サムネイル用の折れ線として組み立てる
+    static func fromCoordinates(_ coordinates: [CLLocationCoordinate2D]) -> RouteData {
+        guard coordinates.count >= 2 else { return .diagonal }
+
+        let lats = coordinates.map(\.latitude)
+        let lons = coordinates.map(\.longitude)
+        let latSpan = max((lats.max() ?? 0) - (lats.min() ?? 0), 0.0001)
+        let lonSpan = max((lons.max() ?? 0) - (lons.min() ?? 0), 0.0001)
+        let minLat = lats.min() ?? 0
+        let minLon = lons.min() ?? 0
+
+        func point(_ c: CLLocationCoordinate2D) -> CGPoint {
+            CGPoint(
+                x: (c.longitude - minLon) / lonSpan,
+                y: 1 - (c.latitude - minLat) / latSpan
+            )
+        }
+
+        let points = coordinates.map(point)
+        let curves = points.dropFirst().map { RouteCurve(control1: $0, control2: $0, end: $0) }
+        return RouteData(start: points[0], curves: Array(curves))
+    }
 }
 
 // MARK: - Ride モデル（GPS実装まではサンプル値で表示）
@@ -43,6 +67,7 @@ struct Ride: Identifiable {
     var maxSpeedKmh: Double
     var elevationGain: Double
     var route: RouteData
+    var coordinates: [CLLocationCoordinate2D] = []
     var thumbnailColors: [Color]
 
     var avgSpeedKmh: Double {
@@ -87,8 +112,19 @@ extension Ride {
             maxSpeedKmh: 98.2,
             elevationGain: 612,
             route: .diagonal,
+            coordinates: sampleCoordinates,
             thumbnailColors: [Color(hex: 0xFF9F0A), Color(hex: 0xFF6200)]
         ),
+    ]
+
+    /// プレビュー・サンプル用の白馬周辺の実座標（GPS未実装時のフォールバック）
+    private static let sampleCoordinates: [CLLocationCoordinate2D] = [
+        CLLocationCoordinate2D(latitude: 36.6982, longitude: 137.8710),
+        CLLocationCoordinate2D(latitude: 36.7040, longitude: 137.8790),
+        CLLocationCoordinate2D(latitude: 36.7120, longitude: 137.8850),
+        CLLocationCoordinate2D(latitude: 36.7200, longitude: 137.8800),
+        CLLocationCoordinate2D(latitude: 36.7260, longitude: 137.8720),
+        CLLocationCoordinate2D(latitude: 36.7210, longitude: 137.8650),
     ]
 
     private static func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
