@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import CoreLocation
 
 // MARK: - ルートデータ（正規化座標 0-1）
@@ -56,28 +57,65 @@ struct RouteData {
     }
 }
 
-// MARK: - Ride モデル（GPS実装まではサンプル値で表示）
+/// CLLocationCoordinate2D は Codable に準拠しないため、永続化用に緯度経度だけを保持するラッパー
+struct StoredCoordinate: Codable {
+    var latitude: Double
+    var longitude: Double
+}
 
-struct Ride: Identifiable {
-    let id = UUID()
+// MARK: - Ride モデル（SwiftData でローカル永続化）
+
+@Model
+final class Ride {
+    var id: UUID
     var name: String
     var date: Date
     var distanceKm: Double
     var duration: TimeInterval
     var maxSpeedKmh: Double
     var elevationGain: Double
-    var route: RouteData
-    var coordinates: [CLLocationCoordinate2D] = []
-    var thumbnailColors: [Color]
+    private var storedCoordinates: [StoredCoordinate]
+    private var thumbnailColorHexValues: [Int]
+
+    init(
+        name: String,
+        date: Date,
+        distanceKm: Double,
+        duration: TimeInterval,
+        maxSpeedKmh: Double,
+        elevationGain: Double,
+        coordinates: [CLLocationCoordinate2D] = [],
+        thumbnailColorHexes: [Int]
+    ) {
+        self.id = UUID()
+        self.name = name
+        self.date = date
+        self.distanceKm = distanceKm
+        self.duration = duration
+        self.maxSpeedKmh = maxSpeedKmh
+        self.elevationGain = elevationGain
+        self.storedCoordinates = coordinates.map { StoredCoordinate(latitude: $0.latitude, longitude: $0.longitude) }
+        self.thumbnailColorHexValues = thumbnailColorHexes
+    }
+
+    var coordinates: [CLLocationCoordinate2D] {
+        storedCoordinates.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+    }
+
+    var thumbnailColors: [Color] {
+        thumbnailColorHexValues.map { Color(hex: UInt($0)) }
+    }
+
+    var route: RouteData { .fromCoordinates(coordinates) }
 
     var avgSpeedKmh: Double {
         duration > 0 ? distanceKm / (duration / 3600) : 0
     }
 
-    var distanceText: String { String(format: "%.1f km", distanceKm) }
+    var distanceText: String { SettingsStore.shared.distanceUnit.distanceText(fromKm: distanceKm) }
     var durationText: String { formatDuration(duration) }
-    var avgSpeedText: String { String(format: "%.1f km/h", avgSpeedKmh) }
-    var maxSpeedText: String { String(format: "%.1f km/h", maxSpeedKmh) }
+    var avgSpeedText: String { SettingsStore.shared.distanceUnit.speedText(fromKmh: avgSpeedKmh) }
+    var maxSpeedText: String { SettingsStore.shared.distanceUnit.speedText(fromKmh: maxSpeedKmh) }
     var elevationText: String { String(format: "%.0f m", elevationGain) }
 
     var shortDateText: String { Self.shortFormatter.string(from: date) }
@@ -96,14 +134,9 @@ struct Ride: Identifiable {
     }
 }
 
-extension Ride: Hashable {
-    static func == (lhs: Ride, rhs: Ride) -> Bool { lhs.id == rhs.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
-}
-
 extension Ride {
     static let samples: [Ride] = [
-        // モック用のサンプルデータ -> SwiftDateでデータの永続化ができたら消す
+        // モック用のサンプルデータ
         Ride(
             name: "白馬ツーリング",
             date: date(2026, 7, 24),
@@ -111,13 +144,12 @@ extension Ride {
             duration: 3 * 3600 + 42 * 60 + 10,
             maxSpeedKmh: 98.2,
             elevationGain: 612,
-            route: .diagonal,
             coordinates: sampleCoordinates,
-            thumbnailColors: [Color(hex: 0xFF9F0A), Color(hex: 0xFF6200)]
+            thumbnailColorHexes: [0xFF9F0A, 0xFF6200]
         ),
     ]
 
-    /// プレビュー・サンプル用の白馬周辺の実座標（GPS未実装時のフォールバック）
+    /// プレビュー・サンプル用の白馬周辺の実座標
     private static let sampleCoordinates: [CLLocationCoordinate2D] = [
         CLLocationCoordinate2D(latitude: 36.6982, longitude: 137.8710),
         CLLocationCoordinate2D(latitude: 36.7040, longitude: 137.8790),

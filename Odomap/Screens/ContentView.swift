@@ -4,10 +4,12 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Ride.date, order: .reverse) private var rides: [Ride]
     @State private var selection = 0
-    @State private var rides: [Ride] = Ride.samples
     @State private var isRecording = false
 
     var body: some View {
@@ -32,7 +34,7 @@ struct ContentView: View {
         }
         .fullScreenCover(isPresented: $isRecording) {
             RecordView { ride in
-                rides.insert(ride, at: 0)
+                modelContext.insert(ride)
             }
         }
     }
@@ -40,4 +42,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .modelContainer(for: Ride.self, inMemory: true)
 }

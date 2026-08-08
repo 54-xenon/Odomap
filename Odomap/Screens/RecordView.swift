@@ -8,7 +8,7 @@ import Observation
 import CoreLocation
 import UIKit
 
-/// 走行時間の計測（GPS実装までは時間のみ実測、他はサンプル値）
+/// 走行時間の計測
 @Observable
 final class RecordingSession {
     let startedAt = Date()
@@ -36,8 +36,10 @@ struct RecordView: View {
 
     @State private var session = RecordingSession()
     @State private var locationManager = LocationManager()
+    @State private var weatherManager = WeatherManager()
     @State private var finishedRide: Ride?
     @State private var showPermissionAlert = false
+    @State private var hasStartedWeatherUpdates = false
 
     var body: some View {
         if let finishedRide {
@@ -48,8 +50,16 @@ struct RecordView: View {
         } else {
             recordingBody
                 .onAppear { attemptStart() }
-                .onDisappear { locationManager.stopRecording() }
+                .onDisappear {
+                    locationManager.stopRecording()
+                    weatherManager.stop()
+                }
                 .onChange(of: locationManager.authorizationStatus) { _, _ in attemptStart() }
+                .onChange(of: locationManager.coordinates.isEmpty) { _, isEmpty in
+                    guard !isEmpty, !hasStartedWeatherUpdates else { return }
+                    hasStartedWeatherUpdates = true
+                    weatherManager.start { locationManager.coordinates.last }
+                }
                 .alert("位置情報の許可が必要です", isPresented: $showPermissionAlert) {
                     Button("設定を開く") {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -101,8 +111,8 @@ struct RecordView: View {
                     columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())],
                     spacing: 12
                 ) {
-                    metricCard("距離", value: String(format: "%.1f km", locationManager.distanceKm))
-                    metricCard("現在速度", value: String(format: "%.0f km/h", locationManager.currentSpeedKmh))
+                    metricCard("距離", value: SettingsStore.shared.distanceUnit.distanceText(fromKm: locationManager.distanceKm))
+                    metricCard("現在速度", value: SettingsStore.shared.distanceUnit.speedText(fromKmh: locationManager.currentSpeedKmh))
                     weatherCard
                     metricCard("高度", value: String(format: "%.0f m", locationManager.currentAltitude))
                 }
@@ -145,10 +155,10 @@ struct RecordView: View {
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
-                Image(systemName: "sun.max.fill")
+                Image(systemName: weatherManager.symbolName)
                     .font(.system(size: 20))
                     .foregroundStyle(Color(hex: 0xFF9F0A))
-                Text("26℃")
+                Text(weatherManager.temperatureText)
                     .font(.system(size: 26, weight: .bold))
             }
         }
@@ -199,9 +209,8 @@ struct RecordView: View {
             duration: session.elapsed(),
             maxSpeedKmh: locationManager.maxSpeedKmh,
             elevationGain: locationManager.elevationGainMeters,
-            route: .fromCoordinates(coordinates),
             coordinates: coordinates,
-            thumbnailColors: [Color(hex: 0x57B7FF), Color(hex: 0x0A84FF)]
+            thumbnailColorHexes: [0x57B7FF, 0x0A84FF]
         )
     }
 }
