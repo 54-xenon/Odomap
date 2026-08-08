@@ -159,14 +159,21 @@ final class LocationManager: NSObject {
 }
 
 extension LocationManager: CLLocationManagerDelegate {
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authorizationStatus = manager.authorizationStatus
+    // CoreLocationはこれらのdelegateメソッドをメインスレッド以外から呼ぶことがあるため、
+    // nonisolatedにした上でMainActorへ明示的にホップする（実機でのみ発生するクラッシュ対策）。
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        Task { @MainActor in
+            self.authorizationStatus = status
+        }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard isRecording, !isPaused else { return }
-        for location in locations {
-            process(location)
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        Task { @MainActor in
+            guard self.isRecording, !self.isPaused else { return }
+            for location in locations {
+                self.process(location)
+            }
         }
     }
 }

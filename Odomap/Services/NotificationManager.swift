@@ -27,7 +27,8 @@ enum NotificationManager {
 final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationPresenter()
 
-    func userNotificationCenter(
+    // UserNotificationsもメインスレッド以外からdelegateを呼ぶことがあるためnonisolatedにする。
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
