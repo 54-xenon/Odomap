@@ -19,7 +19,6 @@ struct SettingView: View {
                 }
                 Section("通知・連携") {
                     settingRow("通知", detail: "オン")
-                    settingRow("iCloud同期", detail: "有効")
                 }
                 Section {
                     LabeledContent("バージョン", value: "1.0.0")
