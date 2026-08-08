@@ -296,6 +296,7 @@
 				INFOPLIST_FILE = Odomap/Info.plist;
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "バックグラウンドでもツーリングのルートを記録し続けるために「常に許可」が必要です。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ツーリング中のルートや距離を記録するために位置情報を使用します。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "気圧高度計を使って走行中の高度・獲得標高を計測するために使用します。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -332,6 +333,7 @@
 				INFOPLIST_FILE = Odomap/Info.plist;
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "バックグラウンドでもツーリングのルートを記録し続けるために「常に許可」が必要です。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ツーリング中のルートや距離を記録するために位置情報を使用します。";
+				INFOPLIST_KEY_NSMotionUsageDescription = "気圧高度計を使って走行中の高度・獲得標高を計測するために使用します。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
