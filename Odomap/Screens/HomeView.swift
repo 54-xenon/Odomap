@@ -7,28 +7,72 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(\.colorScheme) private var colorScheme
+    var rides: [Ride]
     var onStart: () -> Void
 
     var body: some View {
-        // ヘッダー -> FlutterでういうAppBar
-        ZStack {
-            SkyGradientBackground()
-            VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Odomap")
-                        .font(.system(size: 28, weight: .bold))
+        // ヘッダー
+        NavigationStack {
+            ZStack {
+                SkyGradientBackground()
+                VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Odomap")
+                            .font(.system(size: 28, weight: .bold))
+                    }
+
+                    if let latestRide = rides.first {
+                        recentRideCard(latestRide)
+                    }
+
+                    Spacer()
+
+                    startButton
+                        .frame(maxWidth: .infinity)
+
+                    Spacer(minLength: 24)
                 }
-
-                startButton
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 8)
-
-                Spacer()
+                .padding(20)
             }
-            .padding(20)
         }
     }
-    
+
+    private func recentRideCard(_ ride: Ride) -> some View {
+        NavigationLink {
+            RideSummaryView(ride: ride)
+        } label: {
+            HStack(spacing: 14) {
+                RouteThumbnail(ride: ride)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("直近の記録")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Text(ride.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(ride.listDateText)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(ride.distanceText)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(ride.durationText)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .glassEffect(.regular, in: .rect(cornerRadius: 22))
+        }
+        .buttonStyle(.plain)
+    }
+
     // スタートボタン -> これはそのうちUIをまとめたディレクトリの中に移動させたい
     private var startButton: some View {
         let gradient: [Color] = colorScheme == .dark

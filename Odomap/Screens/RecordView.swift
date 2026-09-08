@@ -49,10 +49,14 @@ struct RecordView: View {
             }
         } else {
             recordingBody
-                .onAppear { attemptStart() }
+                .onAppear {
+                    attemptStart()
+                    UIApplication.shared.isIdleTimerDisabled = true
+                }
                 .onDisappear {
                     locationManager.stopRecording()
                     weatherManager.stop()
+                    UIApplication.shared.isIdleTimerDisabled = false
                 }
                 .onChange(of: locationManager.authorizationStatus) { _, _ in attemptStart() }
                 .onChange(of: locationManager.coordinates.isEmpty) { _, isEmpty in
@@ -96,33 +100,52 @@ struct RecordView: View {
                 header
 
                 VStack(spacing: 4) {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text(formatDuration(session.elapsed(now: context.date)))
-                            .font(.system(size: 60, weight: .bold))
-                            .monospacedDigit()
-                    }
-                    Text("走行時間")
+                    Text(SettingsStore.shared.distanceUnit.speedText(fromKmh: locationManager.currentSpeedKmh))
+                        .font(.system(size: 68, weight: .bold))
+                        .monospacedDigit()
+                    Text("現在速度")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
                 .padding(.vertical, 14)
 
                 LazyVGrid(
                     columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible())],
                     spacing: 12
                 ) {
+                    durationCard
                     metricCard("距離", value: SettingsStore.shared.distanceUnit.distanceText(fromKm: locationManager.distanceKm))
-                    metricCard("現在速度", value: SettingsStore.shared.distanceUnit.speedText(fromKmh: locationManager.currentSpeedKmh))
                     weatherCard
                     metricCard("高度", value: String(format: "%.0f m", locationManager.currentAltitude))
                 }
 
-                Spacer()
+                liveMapSection
 
                 controlButtons
             }
             .padding(20)
         }
+    }
+
+    private var liveMapSection: some View {
+        Group {
+            if locationManager.coordinates.isEmpty {
+                VStack(spacing: 8) {
+                    ProgressView()
+                    Text("現在地を取得中…")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.odoCard)
+            } else {
+                LiveRouteMapCard(coordinates: locationManager.coordinates)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var header: some View {
@@ -134,6 +157,22 @@ struct RecordView: View {
             }
             Spacer()
         }
+    }
+
+    private var durationCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("走行時間")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text(formatDuration(session.elapsed(now: context.date)))
+                    .font(.system(size: 26, weight: .bold))
+                    .monospacedDigit()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .glassEffect(.regular, in: .rect(cornerRadius: 22))
     }
 
     private func metricCard(_ title: String, value: String) -> some View {

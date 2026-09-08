@@ -4,12 +4,20 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// 記録終了画面。onSave がある場合は記録直後（保存ボタン表示）、
 /// nil の場合は記録一覧からの詳細表示として振る舞う。
 struct RideSummaryView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+
     var ride: Ride
     var onSave: (() -> Void)?
+
+    @State private var renamingRide: Ride?
+    @State private var editingName = ""
+    @State private var deletingRide: Ride?
 
     var body: some View {
         ScrollView {
@@ -50,6 +58,36 @@ struct RideSummaryView: View {
         .background(Color.odoBackground)
         .navigationTitle(onSave == nil ? ride.name : "")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if onSave == nil {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button {
+                            editingName = ride.name
+                            renamingRide = ride
+                        } label: {
+                            Label("名前を変更", systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            deletingRide = ride
+                        } label: {
+                            Label("削除", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+        }
+        .rideRenameDeleteAlerts(
+            renamingRide: $renamingRide,
+            editingName: $editingName,
+            deletingRide: $deletingRide,
+            onDelete: { ride in
+                modelContext.delete(ride)
+                dismiss()
+            }
+        )
     }
 
     private var header: some View {
