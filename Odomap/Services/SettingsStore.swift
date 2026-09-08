@@ -45,7 +45,7 @@ enum WeatherUpdateInterval: Int, CaseIterable, Identifiable {
     var label: String { "\(rawValue)分" }
 }
 
-/// アプリ全体の設定（UserDefaults にローカル保存）。CloudKit 同期はしない。
+/// アプリ全体の設定（UserDefaults にローカル保存）。CloudKitは今の所使用しない(将来的な機能追加で実装するからも)
 @Observable
 final class SettingsStore {
     static let shared = SettingsStore()

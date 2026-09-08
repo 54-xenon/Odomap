@@ -14,7 +14,7 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selection) {
-            HomeView(onStart: { isRecording = true })
+            HomeView(rides: rides, onStart: { isRecording = true })
             .tabItem {
                 Label("Home", systemImage: "house")
             }

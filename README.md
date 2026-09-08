@@ -7,8 +7,11 @@ Odomap（オドマップ）は、バイク／自転車ツーリングの走行�
 - GPS による走行距離・速度・獲得標高のリアルタイム計測
 - 気圧高度計（Core Motion）を使った高精度な獲得標高計測（GPS高度へのフォールバックあり）
 - WeatherKit 連携によるリアルタイム天気表示・熱中症警告通知
+- 記録中の現在地・走行ルートをその場で確認できるライブマップ表示
+- 記録中は画面が自動スリープしない（`isIdleTimerDisabled`）
 - 走行ルートを地図上に可視化したサマリー画面
-- 過去の走行記録一覧・詳細閲覧
+- 過去の走行記録一覧・詳細閲覧、直近の記録をホーム画面に表示
+- 記録名の変更・記録の削除（記録一覧・詳細画面どちらからも操作可能）
 - 距離／速度の単位（km・mi）、精度優先モード、天気更新間隔などの設定
 
 ## 技術スタック
@@ -47,7 +50,7 @@ Odomap/
 │   └── Ride.swift         # Ride（走行記録）モデル、ルート正規化ロジック
 ├── Screens/
 │   ├── ContentView.swift      # ルートのタブ構成（Home / History / Settings）
-│   ├── HomeView.swift         # ホーム画面（記録開始ボタン）
+│   ├── HomeView.swift         # ホーム画面（直近の記録カード + 記録開始ボタン）
 │   ├── RecordView.swift       # 記録中画面 + RecordingSession
 │   ├── RideSummaryView.swift  # 記録終了直後 / 履歴詳細の共用サマリー画面
 │   ├── HistoryView.swift      # 記録一覧
@@ -58,8 +61,9 @@ Odomap/
 │   ├── SettingsStore.swift       # UserDefaults ベースの設定永続化
 │   └── NotificationManager.swift # ローカル通知の送信・フォアグラウンド表示
 └── UI/
-    ├── Theme.swift         # カラーパレット、背景グラデーション、ブランドマーク、時間フォーマット
-    └── RouteVisuals.swift  # ルートサムネイル・ルートマップ描画コンポーネント
+    ├── Theme.swift             # カラーパレット、背景グラデーション、ブランドマーク、時間フォーマット
+    ├── RouteVisuals.swift      # ルートサムネイル・ルートマップ・記録中ライブマップ描画コンポーネント
+    └── RideEditingAlerts.swift # 記録名変更・削除アラート（履歴一覧/詳細画面で共用）
 ```
 
 詳細な仕様は [docs/SPEC.md](docs/SPEC.md) を参照してください。
@@ -83,8 +87,7 @@ xcodebuild test -project Odomap.xcodeproj -scheme Odomap -destination 'platform=
 
 ## 既知の制約
 
-- 記録名は自動生成（「今日のツーリング」固定）で、編集・削除UIは未実装
-- 記録の削除機能は未実装
 - CloudKit同期・複数端末間の記録共有には非対応
+- 記録中のライブマップはユーザー操作でのパン/ズームのみ対応（ルート全体表示への切り替え等は未実装）
 
 詳細は [docs/SPEC.md](docs/SPEC.md) の「未実装・既知の制約」を参照してください。

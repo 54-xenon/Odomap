@@ -1,12 +1,19 @@
 //
 //  HistoryView.swift
+//  アイテムの一覧画面
 //  Odomap
 //
 
 import SwiftUI
+import SwiftData
 
 struct HistoryView: View {
+    @Environment(\.modelContext) private var modelContext
     var rides: [Ride]
+
+    @State private var renamingRide: Ride?
+    @State private var editingName = ""
+    @State private var deletingRide: Ride?
 
     var body: some View {
         NavigationStack {
@@ -25,6 +32,19 @@ struct HistoryView: View {
                                 rideRow(ride, isLast: ride.id == rides.last?.id)
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                Button {
+                                    editingName = ride.name
+                                    renamingRide = ride
+                                } label: {
+                                    Label("名前を変更", systemImage: "pencil")
+                                }
+                                Button(role: .destructive) {
+                                    deletingRide = ride
+                                } label: {
+                                    Label("削除", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                     .background(Color.odoCard)
@@ -38,6 +58,12 @@ struct HistoryView: View {
             .navigationDestination(for: Ride.self) { ride in
                 RideSummaryView(ride: ride)
             }
+            .rideRenameDeleteAlerts(
+                renamingRide: $renamingRide,
+                editingName: $editingName,
+                deletingRide: $deletingRide,
+                onDelete: { modelContext.delete($0) }
+            )
         }
     }
 

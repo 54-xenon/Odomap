@@ -29,15 +29,16 @@ struct RouteThumbnail: View {
     var ride: Ride
 
     var body: some View {
+        let route = ride.route
         GeometryReader { geo in
             ZStack {
                 LinearGradient(colors: ride.thumbnailColors, startPoint: .topLeading, endPoint: .bottomTrailing)
-                RouteShape(route: ride.route)
+                RouteShape(route: route)
                     .stroke(Color.white.opacity(0.85), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                 Circle().fill(.white).frame(width: 6, height: 6)
-                    .position(point(ride.route.start, in: geo.size))
+                    .position(point(route.start, in: geo.size))
                 Circle().fill(.white).frame(width: 6, height: 6)
-                    .position(point(ride.route.end, in: geo.size))
+                    .position(point(route.end, in: geo.size))
             }
         }
         .frame(width: 56, height: 56)
@@ -49,6 +50,71 @@ struct RouteThumbnail: View {
     }
 }
 
+extension StrokeStyle {
+    /// 記録ルート（ライブ／確定後）で共通して使う線のスタイル
+    static let routeLine = StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+}
+
+/// 記録中画面に表示するライブマップ。現在地に追従しながら、ここまでのルートを描画する。
+struct LiveRouteMapCard: View {
+    var coordinates: [CLLocationCoordinate2D]
+
+    @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var lastCenteredCoordinate: CLLocationCoordinate2D?
+
+    /// この距離未満の移動では再センタリングしない（GPS更新のたびにカメラが揺れるのを防ぐ）
+    private static let recenterThreshold: CLLocationDistance = 8
+
+    var body: some View {
+        Map(position: $cameraPosition, interactionModes: [.pan, .zoom]) {
+            if coordinates.count > 1 {
+                MapPolyline(coordinates: coordinates)
+                    .stroke(Color.odoAccent, style: .routeLine)
+            }
+            if let current = coordinates.last {
+                Annotation("現在地", coordinate: current) {
+                    Circle()
+                        .fill(Color.odoAccent)
+                        .frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(.white, lineWidth: 3))
+                        .shadow(radius: 3)
+                }
+            }
+        }
+        .mapControlVisibility(.hidden)
+        .onChange(of: coordinates.last?.latitude) { _, _ in
+            centerOnCurrentLocationIfNeeded()
+        }
+        .onAppear {
+            centerOnCurrentLocation(animated: false)
+        }
+    }
+
+    private func centerOnCurrentLocationIfNeeded() {
+        guard let current = coordinates.last else { return }
+        if let last = lastCenteredCoordinate {
+            let moved = CLLocation(latitude: current.latitude, longitude: current.longitude)
+                .distance(from: CLLocation(latitude: last.latitude, longitude: last.longitude))
+            guard moved >= Self.recenterThreshold else { return }
+        }
+        centerOnCurrentLocation(animated: true)
+    }
+
+    private func centerOnCurrentLocation(animated: Bool) {
+        guard let current = coordinates.last else { return }
+        lastCenteredCoordinate = current
+        let region = MKCoordinateRegion(
+            center: current,
+            span: MKCoordinateSpan(latitudeDelta: 0.006, longitudeDelta: 0.006)
+        )
+        if animated {
+            withAnimation { cameraPosition = .region(region) }
+        } else {
+            cameraPosition = .region(region)
+        }
+    }
+}
+
 /// 記録終了画面のルートマップ。実GPS座標を MKPolyline として描画する。
 struct RouteMapCard: View {
     var ride: Ride
@@ -56,7 +122,7 @@ struct RouteMapCard: View {
     var body: some View {
         Map(initialPosition: .region(region)) {
             MapPolyline(coordinates: ride.coordinates)
-                .stroke(Color.odoAccent, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                .stroke(Color.odoAccent, style: .routeLine)
 
             if let start = ride.coordinates.first {
                 Marker("開始", coordinate: start)

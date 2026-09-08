@@ -22,7 +22,7 @@ Odomap/
 │   └── Ride.swift         # Ride（走行記録）モデル、ルート正規化ロジック
 ├── Screens/
 │   ├── ContentView.swift      # ルートのタブ構成（Home / History / Settings）
-│   ├── HomeView.swift         # ホーム画面（記録開始ボタン）
+│   ├── HomeView.swift         # ホーム画面（直近の記録カード + 記録開始ボタン）
 │   ├── RecordView.swift       # 記録中画面 + RecordingSession
 │   ├── RideSummaryView.swift  # 記録終了直後 / 履歴詳細の共用サマリー画面
 │   ├── HistoryView.swift      # 記録一覧
@@ -33,8 +33,9 @@ Odomap/
 │   ├── SettingsStore.swift       # UserDefaults ベースの設定永続化
 │   └── NotificationManager.swift # ローカル通知の送信・フォアグラウンド表示
 └── UI/
-    ├── Theme.swift         # カラーパレット、背景グラデーション、ブランドマーク、時間フォーマット
-    └── RouteVisuals.swift  # ルートサムネイル・ルートマップ描画コンポーネント
+    ├── Theme.swift             # カラーパレット、背景グラデーション、ブランドマーク、時間フォーマット
+    ├── RouteVisuals.swift      # ルートサムネイル・ルートマップ・記録中ライブマップ描画コンポーネント
+    └── RideEditingAlerts.swift # 記録名変更・削除アラート（履歴一覧/詳細画面で共用）
 ```
 
 状態管理は Swift `Observation`（`@Observable`）を使用。`LocationManager` / `WeatherManager` / `RecordingSession` は各画面の `@State` として保持される。設定は `SettingsStore.shared` のシングルトンで全画面から参照する。
@@ -46,7 +47,7 @@ Odomap/
 | プロパティ | 型 | 説明 |
 |---|---|---|
 | `id` | `UUID` | 一意識別子 |
-| `name` | `String` | 記録名（現状は固定文字列「今日のツーリング」で自動生成、編集UIは未実装） |
+| `name` | `String` | 記録名（初期値は固定文字列「今日のツーリング」で自動生成。`HistoryView` の長押しメニュー、または `RideSummaryView` 詳細モードの「…」メニューから変更可能） |
 | `date` | `Date` | 記録開始日時 |
 | `distanceKm` | `Double` | 総走行距離（km） |
 | `duration` | `TimeInterval` | 走行時間（秒） |
@@ -85,9 +86,13 @@ Odomap/
 
 - 背景: `SkyGradientBackground`（上部がうっすら青いグラデーション）
 - タイトル「Odomap」
-- 中央の円形「記録開始」ボタン
+- 直近の記録カード（記録が1件以上ある場合のみ表示）
+  - `RouteThumbnail` + 記録名・日付・距離・走行時間を1行表示
+  - タップで `RideSummaryView`（詳細モード）へ遷移
+- 円形「記録開始」ボタン
   - バイクのラインアートアイコン（`BikeMark`）+ 「記録開始」ラベル
   - 直径 186pt の円、青系グラデーション塗り（ライト/ダークで配色が異なる）
+  - `Spacer` により画面下寄りに配置
   - タップで記録画面（`RecordView`）をフルスクリーン表示
 
 ### 4.3 記録中（`RecordView`）
@@ -97,13 +102,15 @@ Odomap/
 **画面構成:**
 - 背景: `SkyGradientBackground(strong: true)`
 - ヘッダー: 開始時刻（例: "14:32 開始"）
-- 中央: 走行時間の大表示（`TimelineView` で毎秒更新、`HH:MM:SS` 形式）
+- 中央: 現在速度の大表示（画面幅いっぱいに中央揃え、`68pt`）。設定単位に応じ km/h または mph
 - 2×2 グリッドのメトリクスカード（`glassEffect` によるグラス調カード）:
+  - 走行時間（`TimelineView` で毎秒更新、`H:MM:SS` 形式、`26pt` の小さめ表示）
   - 距離（設定単位に応じ km/mi）
-  - 現在速度（km/h または mph）
   - 天気（アイコン + 気温、WeatherKitから取得）
   - 高度（m、気圧高度計 or GPS高度）
+- ライブマップ（`LiveRouteMapCard`）: メトリクスカードとフッターの間の余白に表示。現在地取得前は「現在地を取得中…」のプレースホルダー、取得後はここまでのルート（青いポリライン）と現在地マーカーを描画する。カメラは現在地に追従するが、前回センタリング地点から **8m以上移動**した場合のみアニメーション付きで再センタリングする（GPS更新のたびに揺れないための間引き）
 - フッター: 「一時停止／再開」ボタンと「終了」ボタン（赤系グラス調カプセル）
+- 記録中は `UIApplication.shared.isIdleTimerDisabled = true` により画面の自動スリープを抑止し、画面を離れる（記録終了・破棄）と `false` に戻す
 
 **位置情報許可フロー（`attemptStart()`）:**
 - `notDetermined` → 使用中のみ許可をリクエスト
@@ -118,8 +125,10 @@ Odomap/
 ### 4.4 記録終了 / 詳細（`RideSummaryView`）
 
 `onSave` クロージャの有無で2つのモードを兼ねる:
-- **記録直後モード**（`onSave != nil`）: ヘッダー（記録名・日付・保存ボタン）を表示。「保存」タップで `onSave()` → 呼び出し元が保存 → `dismiss()`。
-- **履歴詳細モード**（`onSave == nil`, `HistoryView` からの `NavigationLink` 遷移）: ヘッダーなし、`navigationTitle` に記録名を表示。
+- **記録直後モード**（`onSave != nil`）: ヘッダー（記録名・日付・保存ボタン）を表示。「保存」タップで `onSave()` → 呼び出し元が保存 → `dismiss()`。この時点では `Ride` がまだSwiftDataに未挿入のため、名前変更・削除メニューは表示しない。
+- **履歴詳細モード**（`onSave == nil`, `HistoryView` からの `NavigationLink` 遷移）: ヘッダーなし、`navigationTitle` に記録名を表示。ナビゲーションバー右上の「…」メニューから以下を実行可能:
+  - **名前を変更**: アラート + `TextField` で `ride.name` を編集（空白トリム後、空文字なら変更しない）
+  - **削除**: `confirmationDialog` で確認後、`modelContext.delete(ride)` で削除し `dismiss()` で一覧へ戻る
 
 **共通コンテンツ:**
 - `RouteMapCard`: 実座標を `MapPolyline` で描画した `MapKit` の地図（開始地点=緑マーカー、終了地点=赤マーカー）。座標が無い場合は東京駅周辺をデフォルト表示。
@@ -132,6 +141,9 @@ Odomap/
 - 記録が0件の場合、`ContentUnavailableView` で空状態を表示（「記録がありません」）
 - 各行: `RouteThumbnail`（56×56、ルート曲線+開始/終了ドット） / 記録名 / 日付 / 距離 / 走行時間
 - 行タップで `RideSummaryView`（詳細モード）へ遷移
+- 行を長押し（コンテキストメニュー）すると以下を実行可能:
+  - **名前を変更**: アラート + `TextField` で `ride.name` を編集
+  - **削除**: `confirmationDialog` で確認後、`modelContext.delete(ride)` で削除
 - ナビゲーションタイトル「記録一覧」
 
 ### 4.6 設定（`SettingView`）
@@ -208,6 +220,13 @@ WeatherKit から現在の天気を取得し、設定された間隔（`WeatherU
 - `RouteShape`: `RouteData` を正規化座標からベジェパスに変換する `Shape`
 - `RouteThumbnail`: 56×56の記録一覧用ルートサムネイル（グラデーション背景 + ルート線 + 開始/終了ドット）
 - `RouteMapCard`: 記録終了/詳細画面用の`MapKit`地図。実座標の`MapPolyline`と開始/終了マーカーを表示し、座標のバウンディングボックスに1.4倍のマージンを加えた領域を初期表示する
+- `LiveRouteMapCard`: 記録中画面用のライブ`MapKit`地図。現在地への`MapCameraPosition`追従（`latitudeDelta`/`longitudeDelta` 0.006の範囲、8m以上移動した場合のみ再センタリング）と、ここまでの座標を結ぶ`MapPolyline`、現在地を示す円形アノテーションを描画する
+- `RouteMapCard` / `LiveRouteMapCard` のルート線は共通の `StrokeStyle.routeLine`（幅4pt、丸キャップ/丸ジョイン）を使用する
+
+### 6.3 `RideEditingAlerts.swift`
+
+- `Binding<Ride?>.isPresented`: `Ride?` の状態から `.alert` / `.confirmationDialog` 用の `Binding<Bool>` を導出する拡張
+- `View.rideRenameDeleteAlerts(renamingRide:editingName:deletingRide:onDelete:)`: 「名前を変更」アラートと「この記録を削除しますか？」確認ダイアログをまとめて付与するViewモディファイア。`HistoryView`（一覧の長押しメニュー）と `RideSummaryView`（詳細画面の「…」メニュー）の双方から呼び出され、削除確定時の挙動（`modelContext.delete` のみ、または削除後に `dismiss()`）は `onDelete` クロージャで呼び出し側が指定する
 
 ## 7. 権限・エンタイトルメント
 
@@ -223,8 +242,7 @@ WeatherKit から現在の天気を取得し、設定された間隔（`WeatherU
 
 ## 8. 未実装・既知の制約
 
-- 記録名は自動生成（「今日のツーリング」固定）で、ユーザーによる編集・削除UIは未実装
-- 記録の削除機能は未実装（`HistoryView` にスワイプ削除等なし）
 - ルートサムネイル（`RouteData.diagonal/coastal/winding`）はプリセットとして定義されているが、実データ生成（`fromCoordinates`）に置き換わっており未使用
+- 記録中のライブマップはユーザー操作でのパン/ズームのみ対応（ルート全体表示への切り替えボタン等は未実装）
 - CloudKit同期・複数端末間の記録共有には非対応
 - テスト（`OdomapTests` / `OdomapUITests`）はXcodeテンプレートの雛形のままで、アプリ固有のテストは未実装
